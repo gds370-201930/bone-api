@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"github.com/rs/cors"
 )
 
 var jwtsecret = []byte("goodbonegamelmaao23413251!")
@@ -89,10 +92,14 @@ func register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if t.Nickname == "" {
+		t.Nickname = t.Username
+	}
+
 	user := User{
 		Username:       t.Username,
+		Nickname:       t.Nickname,
 		Password:       t.Password,
-		Email:          t.Email,
 		Deaths:         0,
 		KD:             0,
 		Kills:          0,
@@ -149,9 +156,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user User
-	err = db.Model(&User{}).Where(&User{
-		Username: t.Username,
-	}).First(&user).Error
+	err = db.Model(&User{}).Where("userName = ?", t.Username).First(&user).Error
 
 	if err != nil {
 		json.NewEncoder(w).Encode(ErrResponse{
@@ -197,20 +202,42 @@ func getUsers(w http.ResponseWriter, r *http.Request, token *jwt.Token) {
 	return
 }
 
+func serveWeb(w http.ResponseWriter, r *http.Request) {
+	fp := filepath.Join("static", filepath.Clean(r.URL.Path))
+
+	_, err := os.Stat(fp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fp = filepath.Join("static", "index.html")
+		}
+	}
+
+	//if info.IsDir() {
+	//	fp = filepath.Join("static", "index.html")
+	//}
+
+	http.ServeFile(w, r, fp)
+}
+
 func main() {
+	mux := http.NewServeMux()
+
 	var err error
 	db, err = gorm.Open("mysql", "sfsuser:sfsuser@tcp(130.211.220.11)/sfs")
 	if err != nil {
 		panic(err)
 	}
+	db.LogMode(true)
 	defer db.Close()
 
 	db.AutoMigrate(&User{})
 
-	http.HandleFunc("/register", register)
-	http.HandleFunc("/login", login)
-	http.Handle("/getuser", includeAuth(getUsers))
+	mux.HandleFunc("/api/register", register)
+	mux.HandleFunc("/api/login", login)
+	mux.Handle("/api/getuser", includeAuth(getUsers))
 
-	http.ListenAndServe(":8069", nil)
-	fmt.Println("Listening on port :8069")
+	mux.HandleFunc("/", serveWeb)
+
+	handler := cors.Default().Handler(mux)
+	http.ListenAndServe(":80", handler)
 }

@@ -2,9 +2,9 @@ package main
 
 // User represents a user in the database
 type User struct {
-	Email          string `gorm:"column:email;unique"`
-	Password       string `gorm:"column:passWord"`
 	Username       string `gorm:"column:userName;unique"`
+	Password       string `gorm:"column:passWord"`
+	Nickname       string `gorm:"column:nickName;unique"`
 	Model          int32  `gorm:"column:model"`
 	Wins           int32  `gorm:"column:wins"`
 	Losses         int32  `gorm:"column:losses"`
